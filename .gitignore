@@ -1,0 +1,42 @@
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.cache/
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment configurations and credentials
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Node / JS dependencies and build outputs
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+
+# Logs
+logs/
+*.log
+
+# Generated reports
+reports/report_*
+walkthrough.md
+
+# Large generated data files
+data/documents.json
+data/urls.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
