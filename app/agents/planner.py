@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
-from app.llm.gemini_client import GeminiClient
+from app.llm.groq_client import GroqClient
 from app.llm.prompts import PLANNER_SYSTEM_INSTRUCTION, PLANNER_USER_PROMPT
 from app.utils.logger import logger
 from app.utils.timer import async_timer
@@ -15,14 +15,14 @@ class PlannerOutput(BaseModel):
 async def run_planner(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     LangGraph node for the Planner Agent.
-    Receives topic and depth, runs the Gemini prompt, and saves the research plan in the state.
+    Receives topic and depth, runs the Groq prompt, and saves the research plan in the state.
     """
     topic = state.get("topic", "")
     depth = state.get("depth", "moderate")
     
     logger.info(f"[Planner Agent] Started research planning for topic: '{topic}' with depth: '{depth}'")
     
-    client = GeminiClient()
+    client = GroqClient()
     
     # Format the prompt
     user_prompt = PLANNER_USER_PROMPT.format(topic=topic, depth=depth)

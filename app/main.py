@@ -16,7 +16,7 @@ async def lifespan(app: FastAPI):
     Preloads and tokenizes the 10,000 documents BM25 index to speed up API responses.
     """
     logger.info("Starting Multi-Agent Web Research & Summarization System...")
-    logger.info(f"Configuration - Model: '{settings.gemini_model}' | Log Level: '{settings.log_level}'")
+    logger.info(f"Configuration - Model: '{settings.groq_model}' | Log Level: '{settings.log_level}'")
     
     # Initialize and fit BM25 index at startup
     try:
@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Multi-Agent Web Research & Summarization System",
-    description="Autonomous multi-agent research agent system using FastAPI, LangGraph, and Google Gemini.",
+    description="Autonomous multi-agent research agent system using FastAPI, LangGraph, and Groq.",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -67,4 +67,4 @@ async def health_check():
     """
     Liveness probe.
     """
-    return {"status": "healthy", "model": settings.gemini_model}
+    return {"status": "healthy", "model": settings.groq_model}

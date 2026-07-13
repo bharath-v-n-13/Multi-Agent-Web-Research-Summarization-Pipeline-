@@ -1,6 +1,6 @@
 # Multi-Agent Web Research & Summarization System
 
-An enterprise-grade, production-ready Multi-Agent Web Research & Summarization System built with **Python 3.12+**, **FastAPI**, **LangGraph**, and the official **Google Gemini SDK** (`google-genai`).
+An enterprise-grade, production-ready Multi-Agent Web Research & Summarization System built with **Python 3.12+**, **FastAPI**, **LangGraph**, and the official **Groq SDK** (`groq`).
 
 The system performs autonomous research on a user-provided topic by executing a structured multi-agent loop: planning research, matching documents from a local index of 10,000 pages using a BM25 ranker, scraping HTML text, synthesizing findings into unified sections with citation mapping, and running self-critiques to catch omissions and loop-back for further searching.
 
@@ -9,7 +9,7 @@ The system performs autonomous research on a user-provided topic by executing a 
 ## Key Features
 
 - **LangGraph Orchestrated Workflow**: Robust state machine that coordinates state values across Planner, Searcher, Synthesizer, and Critic agents with loops and conditional routing.
-- **Official Google GenAI SDK (`google-genai`)**: Interacts asynchronously with Gemini models, leveraging Pydantic schemas for strict structured JSON output generation.
+- **Official Groq SDK (`groq`)**: Interacts asynchronously with Groq models, leveraging Pydantic schemas for strict structured JSON output generation.
 - **Embedded BM25 Search Engine**: Pure Python, high-performance BM25 ranker that indexes and ranks a local pre-crawled dataset of 10,000 documents. No external search engine dependencies are needed.
 - **Robust Scraper & Normalizer**: Cleans HTML elements, strips script/style wrappers, normalizes spacing, and stamps scrape dates.
 - **Multi-Format Export support**: Generates high-quality research reports in Markdown, JSON, and professional typeset PDF formats using ReportLab.
@@ -37,7 +37,7 @@ research_system/
 │   │      workflow.py         # LangGraph workflow definition & routing
 │   │
 │   ├── llm/
-│   │      gemini_client.py    # Async Google GenAI SDK wrapper
+│   │      groq_client.py      # Async Groq SDK wrapper
 │   │      prompts.py          # Prompts library
 │   │
 │   ├── search/
@@ -105,8 +105,8 @@ Ensure you are running in a Python 3.12+ environment.
 ### 2. Configure Environment Variables
 Create a `.env` file in the project root:
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
 LOG_LEVEL=INFO
 DATA_DIR=data/
 ```
@@ -218,4 +218,4 @@ Run the test suite to verify code correctness, BM25 scoring, HTML parsing, reque
 ```bash
 pytest -v
 ```
-All tests mock Gemini API interactions, allowing testing of node connectivity and flow logic to run instantly and offline.
+All tests mock Groq API interactions, allowing testing of node connectivity and flow logic to run instantly and offline.

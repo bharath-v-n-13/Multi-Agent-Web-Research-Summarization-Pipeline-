@@ -31,7 +31,7 @@ export const ProgressTimeline: React.FC<ProgressTimelineProps> = ({
       case "searcher":
         return "Searcher Agent Node (BM25 Index)";
       case "synthesizer":
-        return "Synthesizer Agent Node (Gemini 2.5)";
+        return "Synthesizer Agent Node (Groq Llama-3)";
       case "critic":
         return "Critic Agent Node (Self-Correction)";
       default:

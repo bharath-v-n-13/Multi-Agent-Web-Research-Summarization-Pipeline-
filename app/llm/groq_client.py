@@ -8,10 +8,9 @@ from app.utils.logger import logger
 
 T = TypeVar("T", bound=BaseModel)
 
-class GeminiClient:
+class GroqClient:
     """
-    A transparent drop-in wrapper around the official groq SDK that acts as GeminiClient.
-    This avoids changing import paths in other parts of the application.
+    Asynchronous client wrapper for Groq API services.
     """
     def __init__(self, api_key: Optional[str] = None):
         key = api_key or settings.groq_api_key

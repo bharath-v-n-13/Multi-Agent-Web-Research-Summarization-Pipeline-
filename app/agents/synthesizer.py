@@ -1,13 +1,13 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
-from app.llm.gemini_client import GeminiClient
+from app.llm.groq_client import GroqClient
 from app.llm.prompts import SYNTHESIZER_SYSTEM_INSTRUCTION, SYNTHESIZER_USER_PROMPT
 from app.utils.logger import logger
 from app.utils.timer import async_timer
 
 class SynthesizedSection(BaseModel):
     """
-    Sub-schema for sections output by Gemini.
+    Sub-schema for sections output by Groq.
     """
     heading: str = Field(..., description="The heading of this section.")
     content: str = Field(..., description="The comprehensive research content for this section.")
@@ -23,7 +23,7 @@ class SynthesizedReport(BaseModel):
 async def run_synthesizer(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     LangGraph node for the Synthesizer Agent.
-    Aggregates the scraped documents and research plan, prompts Gemini to synthesize
+    Aggregates the scraped documents and research plan, prompts Groq to synthesize
     a structured report, and saves it in the state.
     """
     topic = state.get("topic", "")
@@ -65,7 +65,7 @@ async def run_synthesizer(state: Dict[str, Any]) -> Dict[str, Any]:
         documents=documents_str
     )
     
-    client = GeminiClient()
+    client = GroqClient()
     
     async with async_timer() as t:
         try:

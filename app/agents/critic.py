@@ -1,7 +1,7 @@
 import json
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
-from app.llm.gemini_client import GeminiClient
+from app.llm.groq_client import GroqClient
 from app.llm.prompts import CRITIC_SYSTEM_INSTRUCTION, CRITIC_USER_PROMPT
 from app.utils.logger import logger
 from app.utils.timer import async_timer
@@ -39,7 +39,7 @@ async def run_critic(state: Dict[str, Any]) -> Dict[str, Any]:
             "iteration": iteration + 1
         }
         
-    client = GeminiClient()
+    client = GroqClient()
     
     # Format the user prompt
     user_prompt = CRITIC_USER_PROMPT.format(

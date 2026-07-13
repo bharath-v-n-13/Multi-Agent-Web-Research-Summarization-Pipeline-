@@ -1,6 +1,6 @@
 import os
 # Set dummy API key to satisfy SDK initialization check during tests
-os.environ["GEMINI_API_KEY"] = "mock-api-key-for-testing"
+os.environ["GROQ_API_KEY"] = "mock-api-key-for-testing"
 
 import pytest
 from unittest.mock import AsyncMock, patch
@@ -65,8 +65,8 @@ async def test_full_graph_workflow():
         bias_flags=[]
     )
     
-    # 2. Patch the generate_structured call on GeminiClient
-    with patch("app.llm.gemini_client.GeminiClient.generate_structured") as mock_gen:
+    # 2. Patch the generate_structured call on GroqClient
+    with patch("app.llm.groq_client.GroqClient.generate_structured") as mock_gen:
         # Mock responses in order of call: 1. Planner, 2. Synthesizer, 3. Critic
         mock_gen.side_effect = [mock_planner, mock_synthesizer, mock_critic]
         
