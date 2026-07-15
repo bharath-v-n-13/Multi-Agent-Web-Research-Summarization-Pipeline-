@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Sun, Moon, Cpu, ShieldCheck, RefreshCw } from "lucide-react";
+import { Sun, Moon, ShieldCheck, RefreshCw } from "lucide-react";
 import { useTheme } from "../common/ThemeContext";
 import axios from "axios";
 

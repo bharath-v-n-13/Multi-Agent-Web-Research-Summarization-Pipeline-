@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: research_redis
+    ports:
+      - "6379:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  api:
+    build: .
+    container_name: research_api
+    ports:
+      - "8000:8000"
+    environment:
+      - USE_REDIS=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - ./reports:/workspace/reports
+      - ./logs:/workspace/logs
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+
+  supervisor:
+    build: .
+    container_name: agent_supervisor
+    command: python app/worker_entrypoint.py --agent supervisor
+    environment:
+      - USE_REDIS=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+
+  planner:
+    build: .
+    container_name: agent_planner
+    command: python app/worker_entrypoint.py --agent planner
+    environment:
+      - USE_REDIS=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+
+  searcher:
+    build: .
+    container_name: agent_searcher
+    command: python app/worker_entrypoint.py --agent searcher
+    environment:
+      - USE_REDIS=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 768M
+
+  synthesizer:
+    build: .
+    container_name: agent_synthesizer
+    command: python app/worker_entrypoint.py --agent synthesizer
+    environment:
+      - USE_REDIS=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+
+  critic:
+    build: .
+    container_name: agent_critic
+    command: python app/worker_entrypoint.py --agent critic
+    environment:
+      - USE_REDIS=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M

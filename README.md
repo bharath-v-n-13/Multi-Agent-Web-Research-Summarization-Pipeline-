@@ -1,221 +1,149 @@
-# Multi-Agent Web Research & Summarization System
+# Event-Driven Multi-Agent Web Research & Summarization System
 
-An enterprise-grade, production-ready Multi-Agent Web Research & Summarization System built with **Python 3.12+**, **FastAPI**, **LangGraph**, and the official **Groq SDK** (`groq`).
+An enterprise-grade, production-ready Multi-Agent Web Research & Summarization system. This pipeline is built with **Python 3.12+**, **FastAPI**, **Redis Streams** (acting as the asynchronous message bus), and the **Groq API SDK**.
 
-The system performs autonomous research on a user-provided topic by executing a structured multi-agent loop: planning research, matching documents from a local index of 10,000 pages using a BM25 ranker, scraping HTML text, synthesizing findings into unified sections with citation mapping, and running self-critiques to catch omissions and loop-back for further searching.
-
----
-
-## Key Features
-
-- **LangGraph Orchestrated Workflow**: Robust state machine that coordinates state values across Planner, Searcher, Synthesizer, and Critic agents with loops and conditional routing.
-- **Official Groq SDK (`groq`)**: Interacts asynchronously with Groq models, leveraging Pydantic schemas for strict structured JSON output generation.
-- **Embedded BM25 Search Engine**: Pure Python, high-performance BM25 ranker that indexes and ranks a local pre-crawled dataset of 10,000 documents. No external search engine dependencies are needed.
-- **Robust Scraper & Normalizer**: Cleans HTML elements, strips script/style wrappers, normalizes spacing, and stamps scrape dates.
-- **Multi-Format Export support**: Generates high-quality research reports in Markdown, JSON, and professional typeset PDF formats using ReportLab.
-- **Comprehensive Logging & Telemetry**: Full execution metrics, agent runtimes, iteration loops, and loguru instrumentation.
+The system coordinates multiple specialized agents—a **Planner**, a **Searcher**, a **Synthesizer**, and a **Critic**—supervised by a centralized **Supervisor Agent** to perform autonomous web research, compile structured summaries, map citations, and handle critique-driven loops.
 
 ---
 
-## Architectural Layout
+## System Architecture
 
-```
-research_system/
-├── app/
-│   ├── api/
-│   │      routes.py           # FastAPI routes & Orchestration
-│   │      schemas.py          # Routing schemas
-│   │
-│   ├── agents/
-│   │      planner.py          # Planner agent node
-│   │      searcher.py         # Searcher/indexing agent node
-│   │      synthesizer.py      # Synthesizer agent node
-│   │      critic.py           # Critic & loop agent node
-│   │
-│   ├── graph/
-│   │      state.py            # Shared graph state structure (TypedDict)
-│   │      workflow.py         # LangGraph workflow definition & routing
-│   │
-│   ├── llm/
-│   │      groq_client.py      # Async Groq SDK wrapper
-│   │      prompts.py          # Prompts library
-│   │
-│   ├── search/
-│   │      bm25.py             # Custom BM25 search index
-│   │      scraper.py          # Page normalizer and html-stripper
-│   │      ranking.py          # Merging, deduplication, and score ranking
-│   │
-│   ├── reports/
-│   │      markdown.py         # Markdown compiler
-│   │      pdf.py              # PDF compiler using ReportLab
-│   │      json_report.py      # JSON serializer
-│   │
-│   ├── utils/
-│   │      config.py           # Pydantic Settings management
-│   │      logger.py           # Loguru telemetry configurations
-│   │      timer.py            # Execution duration context managers
-│   │
-│   ├── models/
-│   │      request.py          # API Request pydantic validation
-│   │      response.py         # API Response pydantic validation
-│   │
-│   └── main.py                # Boot application & pre-loads index
-│
-├── data/
-│      documents.json          # Pre-crawled document dataset (10,000 pages)
-│      urls.json               # Full list of crawled URLs
-│
-├── scripts/
-│      generate_dataset.py     # Script to generate synthetic dataset
-│
-├── tests/                     # Unit & Integration test suite
-│
-├── .env                       # Environment credentials configuration
-├── requirements.txt           # Dependency requirements
-└── README.md                  # System Documentation
-```
-
----
-
-## Agent State Flow Diagram
+Instead of running agent routines inside a single sequential thread, this application implements a microservices architecture. **Each agent runs in its own independent process and communicates exclusively through the Redis message bus.**
 
 ```mermaid
 graph TD
-    START([START]) --> Planner[Planner Agent Node]
-    Planner --> Searcher[Searcher Agent Node]
-    Searcher --> Synthesizer[Synthesizer Agent Node]
-    Synthesizer --> Critic[Critic Agent Node]
+    API[FastAPI Gateway] -- "1. POST /research" --> ReqStream[stream:research_requests]
+    ReqStream --> Supervisor[Supervisor Agent]
     
-    Critic --> Decision{Decision Node}
-    Decision -- "requires_research=True & iteration < 2" --> Searcher
-    Decision -- "Otherwise" --> END([END])
+    Supervisor -- "State Management" --> RedisDB[(Redis DB)]
     
-    style START fill:#002B49,stroke:#fff,stroke-width:1px,color:#fff
-    style END fill:#002B49,stroke:#fff,stroke-width:1px,color:#fff
-    style Decision fill:#008080,stroke:#fff,stroke-width:1px,color:#fff
+    Supervisor -- "2. Planning Task" --> PlannerStream[stream:planner]
+    PlannerStream --> Planner[Planner Worker]
+    Planner -- "3. Plan Completed" --> PlannerComp[stream:planner:completed]
+    PlannerComp --> Supervisor
+    
+    Supervisor -- "4. Search Task" --> SearcherStream[stream:searcher]
+    SearcherStream --> Searcher[Searcher Worker]
+    Searcher -- "5. Scraped Pages" --> SearcherComp[stream:searcher:completed]
+    SearcherComp --> Supervisor
+    
+    Supervisor -- "6. Synthesis Task" --> SynthStream[stream:synthesizer]
+    SynthStream --> Synthesizer[Synthesizer Worker]
+    Synthesizer -- "7. Formatted Sections" --> SynthComp[stream:synthesizer:completed]
+    SynthComp --> Supervisor
+    
+    Supervisor -- "8. Critique Task" --> CriticStream[stream:critic]
+    CriticStream --> Critic[Critic Worker]
+    Critic -- "9. Score & Gaps" --> CriticComp[stream:critic:completed]
+    CriticComp --> Supervisor
+    
+    Critic -- "If Requires Research & Loop < 2" --> SearcherStream
+    
+    Supervisor -- "10. Completion Event" --> FinishedStream[stream:research:finished]
+    FinishedStream --> API
+    
+    style RedisDB fill:#c0392b,stroke:#fff,color:#fff
+    style ReqStream fill:#1abc9c,stroke:#fff,color:#fff
+    style FinishedStream fill:#1abc9c,stroke:#fff,color:#fff
 ```
 
 ---
 
-## Setup and Installation
+## Detailed Execution Lifecycle
 
-### 1. Clone the Project Workspace
-Ensure you are running in a Python 3.12+ environment.
-
-### 2. Configure Environment Variables
-Create a `.env` file in the project root:
-```env
-GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=llama-3.3-70b-versatile
-LOG_LEVEL=INFO
-DATA_DIR=data/
-```
-
-### 3. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Populate 10,000 Documents Dataset
-Generate the local document dataset if it is not present:
-```bash
-python scripts/generate_dataset.py
-```
-This generates:
-- `data/documents.json`: Contains 10,000 structured pages spanning Quantum Computing, AI, renewable energy, biology, and cybersecurity.
-- `data/urls.json`: List of document URLs.
+1. **API Entrypoint**: A client submits a research topic to `/research`. The API generates a unique `report_id`, pushes the task onto `stream:research_requests`, and polls the Redis Hash key `research:state:{report_id}`.
+2. **Supervisor Init**: The `Supervisor` consumes the request, initializes state metrics, and publishes to `stream:planner`.
+3. **Planner Worker**: Consumes the topic, splits it into 3-8 queries, decides on a search strategy, and publishes back to `stream:planner:completed`.
+4. **Searcher Worker**: Consumes the sub-queries, executes BM25 searching against a 10,000 document local index, scrapes/normalizes the pages, and publishes to `stream:searcher:completed`.
+5. **Synthesizer Worker**: Receives all scraped pages and original plans, resolves conflicts, drafts sections with citation mappings, and publishes to `stream:synthesizer:completed`.
+6. **Critic Worker**: Scores confidence, raises bias flags, and flags information gaps. Returns execution back to `stream:critic:completed`.
+7. **Loop Decision**: The Supervisor reviews the Critique. If omissions exist and we have run fewer than 2 loops, it publishes new gap queries back to `stream:searcher`. Otherwise, it aggregates total metrics and publishes to `stream:research:finished`.
+8. **Fault Tolerance & Retries**: If any worker crashes, it writes to `stream:supervisor:errors`. The supervisor catches it and retries the failed stage (up to 2 attempts) before marking the request failed.
+9. **Timeout Enforcer**: A background daemon inspects active request timestamps. Any request executing longer than 300 seconds (5 minutes) is terminated.
 
 ---
 
-## Running the Application
+## Deployment & Installation
 
-Start the FastAPI application with Uvicorn:
-```bash
-uvicorn app.main:app --reload
-```
-On startup, the system parses the 10,000 documents and builds the BM25 index in memory (lifespan loader), making search queries instantaneous.
+### Option A: Running with Docker (Recommended)
+This leverages Docker Compose to deploy Redis and the API along with the 5 individual agent worker containers, restricting total resource utilization under 3.5 cores and 3.5GB RAM.
 
-- **API Documentation**: http://127.0.0.1:8000/docs
-- **Health Endpoint**: http://127.0.0.1:8000/health
+1. **Configure Environment Variables**:
+   Create a `.env` file in the root directory:
+   ```env
+   GROQ_API_KEY=your_groq_api_key_here
+   GROQ_MODEL=llama-3.3-70b-versatile
+   LOG_LEVEL=INFO
+   DATA_DIR=data/
+   ```
 
----
+2. **Run Everything with a Single Command**:
+   ```bash
+   make run
+   ```
+   This command automatically down-scales old containers, builds the Docker image, spins up Redis, FastAPI, and the 5 worker daemons, waits for server readiness, executes a query, and verifies output formats.
 
-## API Usage Example
-
-### POST `/research`
-
-#### Request Payload:
-```json
-{
-  "topic": "Future of Quantum Computing",
-  "depth": "deep",
-  "max_sources": 10,
-  "output_format": "pdf"
-}
-```
-
-#### Curl Command:
-```bash
-curl -X 'POST' \
-  'http://127.0.0.1:8000/research' \
-  -H 'accept: application/json' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "topic": "Future of Quantum Computing",
-  "depth": "deep",
-  "max_sources": 10,
-  "output_format": "pdf"
-}'
-```
-
-#### Validated Response Payload:
-```json
-{
-  "report_id": "8c59f213-9f4a-431f-bc87-9da58c0c4be5",
-  "topic": "Future of Quantum Computing",
-  "summary": "Executive summary detailing key aspects of quantum roadmaps, hardware scale, and qubit decoherence control...",
-  "sections": [
-    {
-      "heading": "Superconducting Qubits and Scaling",
-      "content": "Detailed overview of superconductive circuits, hardware limitations, and thermal protection requirements in the NISQ era...",
-      "citations": [
-        "https://www.academic-research-portal.org/quantum_computing/future-of-quantum-computing.html"
-      ]
-    }
-  ],
-  "sources": [
-    {
-      "source_id": "S1",
-      "url": "https://www.academic-research-portal.org/quantum_computing/future-of-quantum-computing.html",
-      "title": "The Future of Quantum Computing: Opportunities and Roadmaps",
-      "relevance_score": 12.84,
-      "scraped_at": "2026-07-13T12:00:00Z"
-    }
-  ],
-  "critique": {
-    "confidence_score": 0.91,
-    "gaps": [],
-    "bias_flags": []
-  },
-  "metadata": {
-    "total_urls_visited": 10,
-    "agent_interactions": 4,
-    "wall_clock_seconds": 8.6
-  }
-}
-```
-
-When a request executes, a formatted report is saved to disk:
-- Markdown reports are exported to `reports/report_<id>.md`
-- JSON reports are exported to `reports/report_<id>.json`
-- Typeset PDFs are exported to `reports/report_<id>.pdf`
+3. **Check Container Logs**:
+   To tail logs from all running agent worker processes:
+   ```bash
+   docker-compose logs -f
+   ```
 
 ---
 
-## Test Verification
+### Option B: Running Locally (Manual)
+Requires Python 3.12+ and a local Redis server running on port `6379`.
 
-Run the test suite to verify code correctness, BM25 scoring, HTML parsing, request models, and routing logic:
+1. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Start Local Redis**:
+   Ensure Redis is active on port `6379`.
+
+3. **Configure Environment Variables**:
+   ```powershell
+   # Windows PowerShell
+   $env:USE_REDIS="true"
+   $env:REDIS_HOST="localhost"
+   $env:REDIS_PORT="6379"
+   $env:GROQ_API_KEY="your-api-key"
+   ```
+
+4. **Launch Web Server and Worker Daemons**:
+   Open separate terminals and start each service:
+   - **FastAPI Backend**: `uvicorn app.main:app --port 8000 --reload`
+   - **Supervisor**: `python app/worker_entrypoint.py --agent supervisor`
+   - **Planner**: `python app/worker_entrypoint.py --agent planner`
+   - **Searcher**: `python app/worker_entrypoint.py --agent searcher`
+   - **Synthesizer**: `python app/worker_entrypoint.py --agent synthesizer`
+   - **Critic**: `python app/worker_entrypoint.py --agent critic`
+
+5. **Launch React Frontend UI**:
+   Navigate to the frontend folder, install packages, and boot the Vite dev server:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   Open **`http://localhost:5173/`** to access the research interface dashboard.
+
+---
+
+## Output Verification
+
+Generated report schemas can be verified against schemas, citation links, unique report IDs, and score boundaries using:
 ```bash
-pytest -v
+./verify.sh
 ```
-All tests mock Groq API interactions, allowing testing of node connectivity and flow logic to run instantly and offline.
+
+---
+
+## Testing
+
+To run the full test suite locally (including unit tests for the ranker, scraper, validation schemas, and the complete event-driven message-bus integration workflow):
+```bash
+PYTHONPATH=. pytest
+```
+All external LLM requests are mocked, allowing tests to run instantly offline.

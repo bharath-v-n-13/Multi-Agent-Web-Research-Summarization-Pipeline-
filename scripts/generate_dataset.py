@@ -84,6 +84,19 @@ CATEGORIES = {
             "<p>Precision medicine tailors therapeutic treatments to individual patients based on genomic sequencing. Genetic biomarkers help clinicians predict drug efficacy and minimize adverse side effects.</p>"
         ],
         "keywords": ["CRISPR", "genomic", "mRNA", "immunology", "protein", "AlphaFold", "enzyme", "biomarker", "metabolic", "pathway"]
+    },
+    "banking_and_finance": {
+        "topics": ["Banking System", "Financial Technology", "Fraud Detection", "Algorithmic Trading", "Credit Scoring", "Automated Customer Service", "Risk Assessment", "Operational Efficiency in Finance"],
+        "adjectives": ["AI-Driven", "Modernizing", "Securing", "Optimizing", "Innovations in", "The Role of AI in"],
+        "nouns": ["Risk Management", "Customer Experience", "Compliance", "Transaction Security", "Credit Risk", "Market Analysis", "Lending Decisions", "Operational Efficiency"],
+        "paragraphs": [
+            "<p>Artificial intelligence is transforming the banking system and the wider finance sector by enabling real-time fraud detection and threat mitigation. Machine learning applications analyze transaction patterns to identify anomalies and prevent unauthorized access in banking.</p>",
+            "<p>Credit scoring models have evolved beyond traditional metrics to incorporate alternative data source indicators. AI-driven risk assessments allow financial institutions and finance companies to make more accurate and inclusive lending decisions.</p>",
+            "<p>Automated customer service powered by natural language processing helps banking organizations handle customer queries efficiently. Conversational agents and chatbots resolve routine requests, enhancing the overall customer experience in the banking sector.</p>",
+            "<p>Algorithmic trading platforms leverage deep learning models to perform market analysis and execute high-frequency trades. These systems process vast datasets to predict market movements and optimize portfolio allocation in finance.</p>",
+            "<p>Regulatory compliance (RegTech) uses cognitive computing to monitor transactions for money laundering and ensure adherence to financial regulations, reducing manual audit overhead and improving operational efficiency in banking.</p>"
+        ],
+        "keywords": ["banking", "finance", "fintech", "fraud", "credit", "trading", "transaction", "lending", "compliance", "customer", "efficiency", "operational"]
     }
 }
 

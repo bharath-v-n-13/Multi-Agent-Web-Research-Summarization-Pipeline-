@@ -67,4 +67,5 @@ async def health_check():
     """
     Liveness probe.
     """
+    # Trigger reload to load refined documents dataset
     return {"status": "healthy", "model": settings.groq_model}

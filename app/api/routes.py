@@ -1,10 +1,11 @@
 import uuid
 import time
+import asyncio
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from app.models.request import ResearchRequest
 from app.models.response import ResearchReportResponse, ReportSection, ReportSource, ReportCritique, ReportMetadata
-from app.graph.workflow import app_graph
+from app.utils.message_bus import get_message_bus
 from app.reports.markdown import generate_markdown_report
 from app.reports.json_report import generate_json_report
 from app.reports.pdf import generate_pdf_report
@@ -48,10 +49,54 @@ async def perform_research(request: ResearchRequest) -> ResearchReportResponse:
     # Generate unique ID for this report run
     report_id = str(uuid.uuid4())
     
+    bus = get_message_bus()
+    
+    # Publish request parameters to message bus
+    request_payload = {
+        "report_id": report_id,
+        "topic": request.topic,
+        "depth": request.depth,
+        "max_sources": request.max_sources,
+        "output_format": request.output_format
+    }
+    
     async with async_timer() as wall_clock:
         try:
-            # Execute LangGraph Workflow
-            final_state = await app_graph.ainvoke(state)
+            await bus.publish("stream:research_requests", request_payload)
+            
+            # Poll for state completion (or timeout)
+            from app.agents.supervisor import SupervisorAgent
+            supervisor = SupervisorAgent(bus=bus)
+            
+            final_state = None
+            max_wait = 300.0  # 5 minutes global timeout
+            poll_interval = 1.0
+            elapsed = 0.0
+            
+            while elapsed < max_wait:
+                state_data = await supervisor.get_state(report_id)
+                if state_data:
+                    status = state_data.get("status")
+                    if status in ["completed", "failed", "timeout"]:
+                        final_state = state_data
+                        break
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+                
+            if not final_state:
+                raise HTTPException(
+                    status_code=504,
+                    detail="The research request timed out at the API gateway."
+                )
+                
+            if final_state.get("status") in ["failed", "timeout"]:
+                raise HTTPException(
+                    status_code=500,
+                    detail=final_state.get("error", "An error occurred during agent execution.")
+                )
+                
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"[API] Error running research workflow: {e}")
             raise HTTPException(
@@ -120,7 +165,8 @@ async def perform_research(request: ResearchRequest) -> ResearchReportResponse:
         sections=validated_sections,
         sources=validated_sources,
         critique=validated_critique,
-        metadata=validated_metadata
+        metadata=validated_metadata,
+        output_format=request.output_format
     )
     
     # Export report file based on format selection

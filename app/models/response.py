@@ -46,3 +46,4 @@ class ResearchReportResponse(BaseModel):
     sources: List[ReportSource] = Field(..., description="Citations and metadata of the references used.")
     critique: ReportCritique = Field(..., description="The critique analysis details.")
     metadata: ReportMetadata = Field(..., description="Orchestration metadata metrics.")
+    output_format: str = Field(..., description="The requested output format (markdown, pdf, json).")

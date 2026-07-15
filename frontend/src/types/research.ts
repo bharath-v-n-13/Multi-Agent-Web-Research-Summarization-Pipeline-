@@ -40,6 +40,7 @@ export interface ResearchReportResponse {
   critique: ReportCritique;
   metadata: ReportMetadata;
   created_at?: string; // Optional field added on the frontend for history
+  output_format?: "markdown" | "pdf" | "json";
 }
 
 export interface AgentStepProgress {
