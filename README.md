@@ -1,21 +1,58 @@
-# Event-Driven Multi-Agent Web Research & Summarization System
+# Multi-Agent Web Research & Summarization System
 
-An enterprise-grade, production-ready Multi-Agent Web Research & Summarization system. This pipeline is built with **Python 3.12+**, **FastAPI**, **Redis Streams** (acting as the asynchronous message bus), and the **Groq API SDK**.
+## Problem Statement
+Conducting thorough research on complex topics typically requires a human to work through several iterative steps: draft a search strategy, execute queries, read and filter articles, synthesize findings, and verify that nothing important was missed. Traditional linear automation pipelines break down at this task for four key reasons:
+- **Lack of planning and strategy**: Simple linear pipelines execute keyword lookups directly, without first drafting a holistic search strategy. This leads to scattered, disjointed information retrieval rather than a coherent research trajectory.
+- **Lack of depth and iteration**: Standard linear systems run a single search pass and immediately produce a summary. They have no mechanism to recognize gaps in the retrieved information or to trigger follow-up searches that fill those gaps.
+- **Hallucinations and unverifiable claims**: Automated summaries often lack strict, traceable citation mappings, making it difficult — or impossible — to trace a given claim back to its primary source document.
+- **Vulnerability to noise**: Raw document feeds are full of extraneous markup, boilerplate, and unrelated content. Left unfiltered, this noise clutters the context window and degrades the quality of synthesis.
 
-The system coordinates multiple specialized agents—a **Planner**, a **Searcher**, a **Synthesizer**, and a **Critic**—supervised by a centralized **Supervisor Agent** to perform autonomous web research, compile structured summaries, map citations, and handle critique-driven loops.
+To address these limitations, this agentic system is designed around **planning, iteration, and verifiable synthesis** rather than a single linear pass. It represents an enterprise-grade, production-ready Multi-Agent Web Research & Summarization System built with **Python 3.12+**, **FastAPI**, **Redis Streams**, and the **Groq SDK**.
+
+---
+
+## Key Features
+- **Decoupled Asynchronous Message Bus**: Integrates Redis Streams to route messages across isolated processes via consumer groups, facilitating distributed execution. (Includes `InMemoryMessageBus` fallback for unit tests).
+- **Process Isolation**: All agents run as independent background worker processes, communicating exclusively via the message bus, preventing process blocks.
+- **Centralized Supervision & State Management**: A dedicated **Supervisor Agent** tracks research lifecycles in Redis hashes, executes stages, manages error-triggered retry pipelines, and enforces a global 5-minute timeout.
+- **Official Groq SDK (`groq`)**: Connects to high-throughput Llama models (e.g. `llama-3.3-70b-versatile`) to generate text and structured JSON with client-level exponential backoff retries for rate limits (429s).
+- **Embedded BM25 Search Engine**: Pure Python, high-performance BM25 ranker that indexes and ranks a local pre-crawled dataset of 10,000 documents. No external search engine dependencies are needed.
+- **Robust Scraper & Normalizer**: Cleans HTML elements, strips script/style wrappers, normalizes spacing, and stamps scrape dates.
+- **Multi-Format Export support**: Generates high-quality research reports in Markdown, JSON, and professional typeset PDF formats using ReportLab.
+- **Comprehensive Logging & Telemetry**: Logs logs to standard output at `INFO` and `DEBUG` levels, generating detailed agent interaction traces.
+
+---
+
+## Technology Stack
+
+### Backend Stack
+- **Python 3.12+** — modern async features and speed.
+- **FastAPI** — high-performance, asynchronous web framework serving the API layer.
+- **Redis** — message bus broker (using Redis Streams) and state cache.
+- **Groq SDK** — interacts with Llama models to generate text and structured JSON output.
+- **Pydantic & Pydantic-Settings** — schema validation and environment configuration.
+- **ReportLab** — programmatically compiles typeset, multi-page PDF documents.
+- **aiofiles** — non-blocking, asynchronous file streaming for static asset downloads.
+- **pytest & pytest-asyncio** — async testing framework.
+
+### Frontend Stack
+- **React 19 & TypeScript** — type-safe, component-driven dashboard UI.
+- **Vite** — fast build tool and dev server with hot module reload.
+- **Tailwind CSS v4** — utility-first CSS for styles, layouts, and custom themes.
+- **Lucide React** — vector icon set for dashboards and action buttons.
 
 ---
 
 ## System Architecture
 
-Instead of running agent routines inside a single sequential thread, this application implements a microservices architecture. **Each agent runs in its own independent process and communicates exclusively through the Redis message bus.**
+The application implements a decoupled frontend-backend architecture. Data flows asynchronously through the system's message bus.
 
 ```mermaid
 graph TD
     API[FastAPI Gateway] -- "1. POST /research" --> ReqStream[stream:research_requests]
     ReqStream --> Supervisor[Supervisor Agent]
     
-    Supervisor -- "State Management" --> RedisDB[(Redis DB)]
+    Supervisor -- "State Persistence" --> RedisDB[(Redis DB)]
     
     Supervisor -- "2. Planning Task" --> PlannerStream[stream:planner]
     PlannerStream --> Planner[Planner Worker]
@@ -49,101 +86,114 @@ graph TD
 
 ---
 
+## Working of the Multi-Agent Nodes
+
+Reasoning labor is divided into specialized worker processes implementing abstract interfaces:
+
+### A. The Planner Agent
+- **File Location**: [planner.py](file:///c:/Users/VeerapunagalingamBha/Desktop/Agent/app/agents/planner.py)
+- **Role**: Analyzes the initial topic and target depth to compile a multi-step search strategy. It outputs a structured list of 3-8 search queries tailored to target the index.
+- **Output Schema**: Validated via Pydantic (`PlannerOutput`), specifying the strategy and queries.
+
+### B. The Searcher Agent
+- **File Location**: [searcher.py](file:///c:/Users/VeerapunagalingamBha/Desktop/Agent/app/agents/searcher.py)
+- **Role**: Coordinates retrieval. It executes queries generated by the Planner against the BM25 index, extracts documents, runs HTML-cleaning and spacing normalization, and updates the shared state.
+
+### C. The Synthesizer Agent
+- **File Location**: [synthesizer.py](file:///c:/Users/VeerapunagalingamBha/Desktop/Agent/app/agents/synthesizer.py)
+- **Role**: Collects all retrieved, normalized document contents, prompts the LLM via GroqClient, and compiles a comprehensive research report.
+- **Output Schema**: Validated via Pydantic (`SynthesizedReport`), structured into an executive summary and multiple sections containing specific text and source citations.
+
+### D. The Critic Agent
+- **File Location**: [critic.py](file:///c:/Users/VeerapunagalingamBha/Desktop/Agent/app/agents/critic.py)
+- **Role**: Acts as the gatekeeper. It evaluates the compiled report against the original prompt, scoring it for confidence, bias, and coverage. If significant gaps are found, it lists target queries and triggers a loop back to the Searcher.
+- **Output Schema**: Validated via Pydantic (`CriticOutput`), indicating `requires_research` (boolean), `confidence_score` (float), `gaps` (list), and `bias_flags` (list).
+
+### E. The Supervisor Agent
+- **File Location**: [supervisor.py](file:///c:/Users/VeerapunagalingamBha/Desktop/Agent/app/agents/supervisor.py)
+- **Role**: Acts as the system coordinator. It consumes new research requests, updates the Redis state key (`research:state:{report_id}`), drives the transition routing, catches agent worker errors to perform retries (limit 2), and runs a timeout monitor to fail runs exceeding 5 minutes.
+
+---
+
 ## Detailed Execution Lifecycle
 
-1. **API Entrypoint**: A client submits a research topic to `/research`. The API generates a unique `report_id`, pushes the task onto `stream:research_requests`, and polls the Redis Hash key `research:state:{report_id}`.
-2. **Supervisor Init**: The `Supervisor` consumes the request, initializes state metrics, and publishes to `stream:planner`.
-3. **Planner Worker**: Consumes the topic, splits it into 3-8 queries, decides on a search strategy, and publishes back to `stream:planner:completed`.
-4. **Searcher Worker**: Consumes the sub-queries, executes BM25 searching against a 10,000 document local index, scrapes/normalizes the pages, and publishes to `stream:searcher:completed`.
-5. **Synthesizer Worker**: Receives all scraped pages and original plans, resolves conflicts, drafts sections with citation mappings, and publishes to `stream:synthesizer:completed`.
-6. **Critic Worker**: Scores confidence, raises bias flags, and flags information gaps. Returns execution back to `stream:critic:completed`.
-7. **Loop Decision**: The Supervisor reviews the Critique. If omissions exist and we have run fewer than 2 loops, it publishes new gap queries back to `stream:searcher`. Otherwise, it aggregates total metrics and publishes to `stream:research:finished`.
-8. **Fault Tolerance & Retries**: If any worker crashes, it writes to `stream:supervisor:errors`. The supervisor catches it and retries the failed stage (up to 2 attempts) before marking the request failed.
-9. **Timeout Enforcer**: A background daemon inspects active request timestamps. Any request executing longer than 300 seconds (5 minutes) is terminated.
+1. **API Submission**: A client posts a request to `/research`. FastAPI generates a unique `report_id`, publishes the payload to `stream:research_requests`, and polls the state key.
+2. **Supervisor Init**: The Supervisor consumes the request, instantiates state hash tables in Redis, and publishes the planner task to `stream:planner`.
+3. **Planner Phase**: The Planner worker consumes the task, executes the LLM call, and publishes queries to `stream:planner:completed`.
+4. **Searcher Phase**: The Searcher worker consumes the queries, runs the BM25 ranker over 10,000 local documents, scrapes/normalizes HTML content, and publishes to `stream:searcher:completed`.
+5. **Synthesizer Phase**: The Synthesizer worker receives documents, generates report sections and the summary, and publishes to `stream:synthesizer:completed`.
+6. **Critic Phase**: The Critic worker reviews the report and sends feedback to `stream:critic:completed`.
+7. **Routing & Critique Loop**: The Supervisor processes the critique:
+   - If `requires_research=True` and loop count is less than 2, it publishes the missing gaps back to `stream:searcher` for a re-search loop.
+   - Else, it compiles wall-clock durations and publishes the final state to `stream:research:finished`.
+8. **Fault Tolerance**: If a worker encounters an error, it publishes to `stream:supervisor:errors`. The supervisor increments the retry counter and republishes the task up to 2 times.
+9. **Timeout Monitor**: A background watcher checks active runtimes. If any task runs longer than 300 seconds, it aborts execution and publishes a timeout error.
 
 ---
 
-## Deployment & Installation
+## How to Run (Quickstart Guide)
 
-### Option A: Running with Docker (Recommended)
-This leverages Docker Compose to deploy Redis and the API along with the 5 individual agent worker containers, restricting total resource utilization under 3.5 cores and 3.5GB RAM.
+Follow these steps to build and run the multi-agent system from scratch using Docker:
 
-1. **Configure Environment Variables**:
-   Create a `.env` file in the root directory:
-   ```env
-   GROQ_API_KEY=your_groq_api_key_here
-   GROQ_MODEL=llama-3.3-70b-versatile
-   LOG_LEVEL=INFO
-   DATA_DIR=data/
-   ```
+### 1. Clone the Code
+```bash
+git clone https://github.com/bharath-v-n-13/Multi-Agent-Web-Research-Summarization-Pipeline-.git
+cd Multi-Agent-Web-Research-Summarization-Pipeline-
+```
 
-2. **Run Everything with a Single Command**:
-   ```bash
-   make run
-   ```
-   This command automatically down-scales old containers, builds the Docker image, spins up Redis, FastAPI, and the 5 worker daemons, waits for server readiness, executes a query, and verifies output formats.
+### 2. Configure the Groq Key
+Create a `.env` file in the project root:
+```env
+GROQ_API_KEY=your_groq_api_key_here
+```
 
-3. **Check Container Logs**:
-   To tail logs from all running agent worker processes:
-   ```bash
-   docker-compose logs -f
-   ```
+### 3. Build & Run Containers
+To build and launch Redis, the backend API, and all agent workers:
+```bash
+docker-compose up --build -d
+```
 
----
+### 4. Start the Frontend UI
+In a separate terminal, start the UI:
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-### Option B: Running Locally (Manual)
-Requires Python 3.12+ and a local Redis server running on port `6379`.
+### 5. Access the System
+- **Frontend Dashboard**: Open [http://localhost:5173](http://localhost:5173)
+- **Backend API Docs**: Open [http://localhost:8000/docs](http://localhost:8000/docs)
 
-1. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
 
-2. **Start Local Redis**:
-   Ensure Redis is active on port `6379`.
 
-3. **Configure Environment Variables**:
-   ```powershell
-   # Windows PowerShell
-   $env:USE_REDIS="true"
-   $env:REDIS_HOST="localhost"
-   $env:REDIS_PORT="6379"
-   $env:GROQ_API_KEY="your-api-key"
-   ```
+## How to Use the Research Dashboard UI
 
-4. **Launch Web Server and Worker Daemons**:
-   Open separate terminals and start each service:
-   - **FastAPI Backend**: `uvicorn app.main:app --port 8000 --reload`
-   - **Supervisor**: `python app/worker_entrypoint.py --agent supervisor`
-   - **Planner**: `python app/worker_entrypoint.py --agent planner`
-   - **Searcher**: `python app/worker_entrypoint.py --agent searcher`
-   - **Synthesizer**: `python app/worker_entrypoint.py --agent synthesizer`
-   - **Critic**: `python app/worker_entrypoint.py --agent critic`
+### Step 1: User Interface (UI)
+The user inputs the research topic, target depth (shallow, moderate, or deep), maximum sources count, and desired output format (JSON, Markdown, or PDF) on the dashboard form.
 
-5. **Launch React Frontend UI**:
-   Navigate to the frontend folder, install packages, and boot the Vite dev server:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-   Open **`http://localhost:5173/`** to access the research interface dashboard.
+### Step 2: Agent Orchestration and Execution
+Once submitted, the system displays live process status updates, showing which agent worker process is currently executing (Planner, Searcher, Synthesizer, or Critic).
+
+### Step 3: Research Dashboard
+The dashboard displays agent execution metrics, research durations, active statistics, and links to download completed reports in Markdown, JSON, or typeset PDF files.
+
+### Step 4: Research History
+The Research History tab allows users to search, filter, and review previous research sessions and retrieve their generated documents.
 
 ---
 
-## Output Verification
+## Verification & Testing
 
-Generated report schemas can be verified against schemas, citation links, unique report IDs, and score boundaries using:
+### Output Validation
+Validate generated JSON reports against schema definitions, citation integrity, ID uniqueness, and confidence boundaries using:
 ```bash
 ./verify.sh
 ```
 
----
-
-## Testing
-
-To run the full test suite locally (including unit tests for the ranker, scraper, validation schemas, and the complete event-driven message-bus integration workflow):
+### Run Tests
+To run the automated test suite locally:
 ```bash
 PYTHONPATH=. pytest
 ```
-All external LLM requests are mocked, allowing tests to run instantly offline.
+Tests are fully mocked and run instantly offline.
