@@ -26,8 +26,8 @@ services:
     depends_on:
       - redis
     volumes:
-      - ./reports:/workspace/reports
-      - ./logs:/workspace/logs
+      - reports_data:/workspace/reports
+      - logs_data:/workspace/logs
     deploy:
       resources:
         limits:
@@ -123,3 +123,8 @@ services:
         limits:
           cpus: '0.50'
           memory: 512M
+
+volumes:
+  reports_data:
+  logs_data:
+
